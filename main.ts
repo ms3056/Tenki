@@ -1,137 +1,463 @@
-import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting } from 'obsidian';
+import {
+    App,
+    Plugin,
+    PluginSettingTab,
+    Setting,
+    WorkspaceLeaf,
+    ItemView
+} from "obsidian";
+import axios from "axios";
 
-// Remember to rename these classes and interfaces!
+const WEATHER_VIEW_TYPE = "weather-view";
 
-interface MyPluginSettings {
-	mySetting: string;
+interface ForecastDay {
+    date: string;
+    day: {
+        condition: {
+            icon: string;
+        };
+        daily_chance_of_rain: number;
+    };
 }
 
-const DEFAULT_SETTINGS: MyPluginSettings = {
-	mySetting: 'default'
+interface Forecast {
+    forecastday: ForecastDay[];
 }
 
-export default class MyPlugin extends Plugin {
-	settings: MyPluginSettings;
-
-	async onload() {
-		await this.loadSettings();
-
-		// This creates an icon in the left ribbon.
-		const ribbonIconEl = this.addRibbonIcon('dice', 'Sample Plugin', (evt: MouseEvent) => {
-			// Called when the user clicks the icon.
-			new Notice('This is a notice!');
-		});
-		// Perform additional things with the ribbon
-		ribbonIconEl.addClass('my-plugin-ribbon-class');
-
-		// This adds a status bar item to the bottom of the app. Does not work on mobile apps.
-		const statusBarItemEl = this.addStatusBarItem();
-		statusBarItemEl.setText('Status Bar Text');
-
-		// This adds a simple command that can be triggered anywhere
-		this.addCommand({
-			id: 'open-sample-modal-simple',
-			name: 'Open sample modal (simple)',
-			callback: () => {
-				new SampleModal(this.app).open();
-			}
-		});
-		// This adds an editor command that can perform some operation on the current editor instance
-		this.addCommand({
-			id: 'sample-editor-command',
-			name: 'Sample editor command',
-			editorCallback: (editor: Editor, view: MarkdownView) => {
-				console.log(editor.getSelection());
-				editor.replaceSelection('Sample Editor Command');
-			}
-		});
-		// This adds a complex command that can check whether the current state of the app allows execution of the command
-		this.addCommand({
-			id: 'open-sample-modal-complex',
-			name: 'Open sample modal (complex)',
-			checkCallback: (checking: boolean) => {
-				// Conditions to check
-				const markdownView = this.app.workspace.getActiveViewOfType(MarkdownView);
-				if (markdownView) {
-					// If checking is true, we're simply "checking" if the command can be run.
-					// If checking is false, then we want to actually perform the operation.
-					if (!checking) {
-						new SampleModal(this.app).open();
-					}
-
-					// This command will only show up in Command Palette when the check function returns true
-					return true;
-				}
-			}
-		});
-
-		// This adds a settings tab so the user can configure various aspects of the plugin
-		this.addSettingTab(new SampleSettingTab(this.app, this));
-
-		// If the plugin hooks up any global DOM events (on parts of the app that doesn't belong to this plugin)
-		// Using this function will automatically remove the event listener when this plugin is disabled.
-		this.registerDomEvent(document, 'click', (evt: MouseEvent) => {
-			console.log('click', evt);
-		});
-
-		// When registering intervals, this function will automatically clear the interval when the plugin is disabled.
-		this.registerInterval(window.setInterval(() => console.log('setInterval'), 5 * 60 * 1000));
-	}
-
-	onunload() {
-
-	}
-
-	async loadSettings() {
-		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
-	}
-
-	async saveSettings() {
-		await this.saveData(this.settings);
-	}
+interface WeatherAPIResponse {
+    location: {
+        name: string;
+    };
+    current: {
+        condition: {
+            icon: string;
+            text: string;
+        };
+        temp_c: number;
+        temp_f: number;
+        feelslike_c: number;
+        feelslike_f: number;
+        humidity: number;
+        uv: number;
+        air_quality: {
+            "us-epa-index": number;
+        };
+        last_updated: string;
+    };
+    forecast: Forecast;
 }
 
-class SampleModal extends Modal {
-	constructor(app: App) {
-		super(app);
-	}
-
-	onOpen() {
-		const {contentEl} = this;
-		contentEl.setText('Woah!');
-	}
-
-	onClose() {
-		const {contentEl} = this;
-		contentEl.empty();
-	}
+interface WeatherSettings {
+    apiKey: string;
+    unit: "celsius" | "fahrenheit";
+    refreshInterval: number;
+    location: string;
 }
 
-class SampleSettingTab extends PluginSettingTab {
-	plugin: MyPlugin;
+const DEFAULT_SETTINGS: WeatherSettings = {
+    apiKey: "",
+    unit: "celsius",
+    refreshInterval: 30,
+    location: ""
+};
 
-	constructor(app: App, plugin: MyPlugin) {
-		super(app, plugin);
-		this.plugin = plugin;
-	}
+export default class WeatherPlugin extends Plugin {
+    view : WeatherView;
+    settings : WeatherSettings;
+    updateInterval : NodeJS.Timeout | null = null;
 
-	display(): void {
-		const {containerEl} = this;
+    public async onload(): Promise < void > {
+        this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
 
-		containerEl.empty();
+        this.registerView(WEATHER_VIEW_TYPE, (leaf) => (this.view = new WeatherView(leaf, this)));
 
-		containerEl.createEl('h2', {text: 'Settings for my awesome plugin.'});
+        this.addCommand(
+            {id: "open", name: "open", callback: this.onShow.bind(this)}
+        );
 
-		new Setting(containerEl)
-			.setName('Setting #1')
-			.setDesc('It\'s a secret')
-			.addText(text => text
-				.setPlaceholder('Enter your secret')
-				.setValue(this.plugin.settings.mySetting)
-				.onChange(async (value) => {
-					console.log('Secret: ' + value);
-					this.plugin.settings.mySetting = value;
-					await this.plugin.saveSettings();
-				}));
-	}
+        let isViewInitialized = false;
+
+        const checkLayoutInterval = setInterval(async () => {
+            if (this.app.workspace.layoutReady && ! isViewInitialized) {
+                await this.initView();
+                isViewInitialized = true;
+                clearInterval(checkLayoutInterval);
+            }
+        }, 1000);
+
+        this.app.workspace.onLayoutReady(async () => {
+            if (! isViewInitialized) {
+                await this.initView();
+                isViewInitialized = true;
+                clearInterval(checkLayoutInterval);
+            }
+        });
+
+        this.addSettingTab(new WeatherSettingTab(this.app, this));
+    }
+
+    public onunload(): void {
+        this.clearUpdateInterval();
+    }
+
+    public onShow(): void {
+        this.initView();
+    }
+
+    private async initView(): Promise < void > {
+        if (this.app.workspace.getLeavesOfType(WEATHER_VIEW_TYPE).length) {
+            return;
+        }
+
+        const leaf = this.app.workspace.getRightLeaf(false);
+        if (leaf) {
+            await leaf.setViewState({type: WEATHER_VIEW_TYPE});
+            this.app.workspace.revealLeaf(leaf);
+
+            // Check if the view is already created
+            if (this.view instanceof WeatherView) { // Update the existing view
+                this.view.displayTemperature();
+            } else { // Create a new view
+                this.view = new WeatherView(leaf, this);
+                this.updateInterval = setInterval(this.view.displayTemperature.bind(this.view), this.settings.refreshInterval * 1000);
+            }
+        }
+    }
+
+    public clearUpdateInterval(): void {
+        if (this.updateInterval) {
+            clearInterval(this.updateInterval);
+            this.updateInterval = null;
+        }
+    }
+
+    async saveSettings(): Promise < void > {
+        await this.saveData(this.settings);
+    }
+}
+
+class WeatherView extends ItemView {
+    plugin : WeatherPlugin;
+    weatherContainer : HTMLElement;
+
+    constructor(leaf : WorkspaceLeaf, plugin : WeatherPlugin) {
+        super(leaf);
+        this.plugin = plugin;
+    }
+
+    async onOpen() {
+        this.displayTemperature();
+        this.plugin.updateInterval = setInterval(() => this.displayTemperature(), this.plugin.settings.refreshInterval * 1000);
+    }
+
+    onClose() {
+        this.plugin.clearUpdateInterval();
+        return super.onClose();
+    }
+
+    getViewType() {
+        return WEATHER_VIEW_TYPE;
+    }
+
+    public getDisplayText(): string {
+        return "Weather";
+    }
+
+    // Return the icon for the view
+    public getIcon(): string {
+        return "sun";
+    }
+
+    async fetchWeatherData(): Promise < WeatherAPIResponse > {
+        const WEATHER_API_URL = `http://api.weatherapi.com/v1/forecast.json?key=${
+            this.plugin.settings.apiKey
+        }&q=${
+            this.plugin.settings.location
+        }&days=3&aqi=yes`;
+        const response = await axios.get<WeatherAPIResponse>(WEATHER_API_URL);
+        return response.data;
+    }
+
+    displayTemperature() {
+        this.fetchWeatherData().then((weatherData) => {
+            const weatherWidget = this.createWeatherWidget(weatherData);
+            this.containerEl.empty();
+            this.containerEl.appendChild(weatherWidget);
+        }).catch((error) => {
+            console.error("Failed to fetch weather data", error);
+        });
+    }
+
+    createWeatherWidget(weatherData : WeatherAPIResponse) {
+        const location = weatherData.location.name;
+        const currentIcon = weatherData.current.condition.icon;
+        const currentTemp = this.getTemperatureString(weatherData.current.temp_c, weatherData.current.temp_f);
+        const feelsLikeTemp = this.getTemperatureString(weatherData.current.feelslike_c, weatherData.current.feelslike_f);
+        const humidity = `${
+            weatherData.current.humidity
+        }%`;
+        const uv = weatherData.current.uv.toString();
+        const aq = weatherData.current.air_quality["us-epa-index"].toString();
+        const currentConditions = weatherData.current.condition.text;
+        const forecastData = this.extractForecastData(weatherData.forecast);
+        const lastUpdated = weatherData.current.last_updated;
+
+        const weatherContainer = document.createElement("div");
+        weatherContainer.className = "weather-container";
+
+        const locationDiv = document.createElement("div");
+        locationDiv.className = "location";
+        locationDiv.textContent = location;
+        weatherContainer.appendChild(locationDiv);
+
+        const currentContainer = document.createElement("div");
+        currentContainer.className = "current-container";
+        weatherContainer.appendChild(currentContainer);
+
+        const currentIconImg = document.createElement("img");
+        currentIconImg.className = "current-icon";
+        currentIconImg.src = `http:${currentIcon}`;
+        currentIconImg.alt = "Weather Icon";
+        currentContainer.appendChild(currentIconImg);
+
+        const currentStatsContainer = document.createElement("div");
+        currentStatsContainer.className = "current-stats-container";
+        currentContainer.appendChild(currentStatsContainer);
+
+        const currentTempContainer = document.createElement("div");
+        currentTempContainer.className = "current-temp-container";
+        currentStatsContainer.appendChild(currentTempContainer);
+
+        const currentTempDiv = document.createElement("div");
+        currentTempDiv.className = "current-temp";
+        currentTempDiv.textContent = currentTemp;
+        currentTempContainer.appendChild(currentTempDiv);
+
+        const feelsLikeTempDiv = document.createElement("div");
+        feelsLikeTempDiv.className = "current-feelslike";
+        feelsLikeTempDiv.textContent = feelsLikeTemp;
+        currentTempContainer.appendChild(feelsLikeTempDiv);
+
+        const humidityDiv = document.createElement("div");
+        humidityDiv.className = "current-humidity";
+        humidityDiv.textContent = "Humidity: ";
+        currentStatsContainer.appendChild(humidityDiv);
+
+        const humidityValueDiv = document.createElement("div");
+        humidityValueDiv.className = "current-humidity-value";
+        humidityValueDiv.textContent = humidity;
+        humidityDiv.appendChild(humidityValueDiv);
+
+        const uvDiv = document.createElement("div");
+        uvDiv.className = "current-uv";
+        uvDiv.textContent = "UV: ";
+        currentStatsContainer.appendChild(uvDiv);
+
+        const uvValueDiv = document.createElement("div");
+        uvValueDiv.className = "current-uv-value";
+        uvValueDiv.textContent = uv;
+        uvDiv.appendChild(uvValueDiv);
+
+        const aqDiv = document.createElement("div");
+        aqDiv.className = "current-aq";
+        const aqText = document.createElement("span");
+        aqText.textContent = "AQ: ";
+        aqDiv.appendChild(aqText);
+
+        const aqValueDiv = document.createElement("div");
+        aqValueDiv.className = "current-aq-value";
+        aqValueDiv.textContent = aq;
+
+        const aqIconDiv = document.createElement("div");
+        aqIconDiv.className = "current-aq-icon";
+        const aqIcon = this.createIcon(aq);
+        aqIconDiv.appendChild(aqIcon);
+
+        aqDiv.appendChild(aqValueDiv);
+        aqDiv.appendChild(aqIconDiv);
+        currentStatsContainer.appendChild(aqDiv);
+
+        const currentConditionsDiv = document.createElement("div");
+        currentConditionsDiv.className = "current-conditions";
+        currentConditionsDiv.textContent = currentConditions;
+        weatherContainer.appendChild(currentConditionsDiv);
+
+        const forecastContainer = document.createElement("div");
+        forecastContainer.className = "forecast-container";
+        weatherContainer.appendChild(forecastContainer);
+
+        forecastData.forEach((forecast) => {
+            const forecastDayContainer = document.createElement("div");
+            forecastDayContainer.className = "forecast-day-container";
+            forecastContainer.appendChild(forecastDayContainer);
+
+            const forecastDayDiv = document.createElement("div");
+            forecastDayDiv.className = "forecast-day";
+            const forecastDate = new Date(forecast.day);
+            const today = new Date();
+
+            const options: Intl.DateTimeFormatOptions = {
+                month: "short",
+                day: "numeric"
+            };
+            forecastDayDiv.textContent = forecastDate.toLocaleDateString(undefined, options);
+            if (forecastDate.getDate() === today.getDate() && forecastDate.getMonth() === today.getMonth() && forecastDate.getFullYear() === today.getFullYear()) {
+                forecastDayDiv.textContent = "Today";
+            } else {
+                const options: Intl.DateTimeFormatOptions = {
+                    month: "short",
+                    day: "numeric"
+                };
+                forecastDayDiv.textContent = forecastDate.toLocaleDateString(undefined, options);
+            } forecastDayContainer.appendChild(forecastDayDiv);
+
+            const forecastIconImg = document.createElement("img");
+            forecastIconImg.className = "forecast-icon";
+            forecastIconImg.src = `http:${
+                forecast.icon
+            }`;
+            forecastIconImg.alt = "Weather Icon";
+            forecastDayContainer.appendChild(forecastIconImg);
+
+            const forecastRainDiv = document.createElement("div");
+            forecastRainDiv.className = "forecast-rain";
+            forecastRainDiv.textContent = forecast.rain;
+            forecastDayContainer.appendChild(forecastRainDiv);
+        });
+
+        const lastUpdatedDiv = document.createElement("div");
+        lastUpdatedDiv.className = "last-updated";
+        lastUpdatedDiv.textContent = "Source Updated: " + lastUpdated;
+        weatherContainer.appendChild(lastUpdatedDiv);
+
+        return weatherContainer;
+    }
+
+    getTemperatureString(celsius : number, fahrenheit : number) {
+        if (this.plugin.settings.unit === "celsius") {
+            return `${celsius}°C`;
+        } else {
+            return `${fahrenheit}°F`;
+        }
+    }
+
+    extractForecastData(forecast? : Forecast): {
+        day: string;
+        icon: string;
+        rain: string;
+    }[]{
+        if (!forecast) 
+            return [];
+        
+
+        return forecast.forecastday.map(
+            (forecastDay : ForecastDay) => ({day: forecastDay.date, icon: forecastDay.day.condition.icon, rain: `${
+                    forecastDay.day.daily_chance_of_rain
+                }%`})
+        );
+    }
+
+    createIcon(iconType : string) {
+        const icon = document.createElement("span");
+        icon.className = "weather-icon";
+
+        switch (iconType) {
+            case "1": icon.textContent = "😊"; // Good
+                break;
+            case "2": icon.textContent = "😐"; // Moderate
+                break;
+            case "3": icon.textContent = "😷"; // Unhealthy for sensitive group
+                break;
+            case "4": icon.textContent = "😷"; // Unhealthy
+                break;
+            case "5": icon.textContent = "😨"; // Very Unhealthy
+                break;
+            case "6": icon.textContent = "☠️"; // Hazardous
+                break;
+            default: icon.textContent = "";
+        }
+
+        return icon;
+    }
+}
+
+// Settings
+class WeatherSettingTab extends PluginSettingTab {
+    plugin : WeatherPlugin;
+
+    constructor(app : App, plugin : WeatherPlugin) {
+        super(app, plugin);
+        if (!plugin) {
+            throw new Error("Plugin is undefined");
+        }
+        this.plugin = plugin;
+    }
+
+    async display() {
+        const {containerEl} = this;
+        containerEl.empty();
+		const div = containerEl.createEl("div", { cls: "recent-files-donation" });
+
+		const donateText = document.createElement("div");
+		donateText.className = "donate-text";
+		
+		const donateDescription = document.createElement("p");
+		donateDescription.textContent =
+		  "If you find this plugin valuable and would like to support its development, please consider using the button below. Your contribution is greatly appreciated!";
+		
+		donateText.appendChild(donateDescription);
+		
+		const donateLink = document.createElement("a");
+		donateLink.href = "https://www.buymeacoffee.com/mstam30561";
+		donateLink.target = "_blank";
+		
+		const donateImage = document.createElement("img");
+		donateImage.src = "https://cdn.buymeacoffee.com/buttons/v2/default-blue.png";
+		donateImage.alt = "Buy Me A Coffee";
+		donateImage.style.height = "60px";
+		donateImage.style.width = "217px";
+		
+		donateLink.appendChild(donateImage);
+		donateText.appendChild(donateLink);
+		
+		div.appendChild(donateText);
+        containerEl.createEl("h1", {text: "Tenki"});
+
+        new Setting(containerEl).setName("API Key").setDesc(createFragment((fragment) => {
+            fragment.append("Enter your API Key", fragment.createEl("br"), fragment.createEl("a", {
+                text: "Get your free key here:",
+                href: "https://www.weatherapi.com/"
+            }));
+        })).addText((text) => text.setPlaceholder("Enter API key").setValue(this.plugin.settings.apiKey).onChange(async (value) => {
+            this.plugin.settings.apiKey = value.trim();
+            await this.plugin.saveSettings();
+            this.plugin.view.displayTemperature();
+        }));
+
+        new Setting(containerEl).setName("Location").setDesc("Enter your location").addText((text) => text.setPlaceholder("Enter your location").setValue(this.plugin.settings.location).onChange(async (value) => {
+            this.plugin.settings.location = value.trim();
+            await this.plugin.saveSettings();
+            this.plugin.view.displayTemperature();
+        }));
+
+        new Setting(containerEl).setName("Unit").setDesc("Select the unit for temperature").addDropdown((dropdown) => dropdown.addOption("celsius", "Celsius").addOption("fahrenheit", "Fahrenheit").setValue(this.plugin.settings.unit).onChange(async (value) => {
+            this.plugin.settings.unit = value as | "celsius" | "fahrenheit";
+            await this.plugin.saveSettings();
+            this.plugin.view.displayTemperature();
+        }));
+
+        new Setting(containerEl).setName("Refresh Interval").setDesc("Set the refresh interval in minutes").addText((text) => text.setPlaceholder("Enter refresh interval").setValue((this.plugin.settings.refreshInterval / 60).toString()).onChange(async (value) => {
+            const minutes = parseInt(value.trim());
+            if (!isNaN(minutes) && minutes > 0) {
+                this.plugin.settings.refreshInterval = minutes * 60;
+                await this.plugin.saveSettings();
+                this.plugin.clearUpdateInterval();
+                this.plugin.view.displayTemperature();
+                this.plugin.updateInterval = setInterval(() => this.plugin.view.displayTemperature(), this.plugin.settings.refreshInterval * 1000);
+            }
+        }));
+
+
+		
+    }
 }

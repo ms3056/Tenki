@@ -1,8 +1,190 @@
-/*
+.theme-dark {
+    --background: #1C2732; /* Dark Gray-Blue */
+    --main-text: #aabed8; /* Light Gray */
+    --secondary-text: #677e97; /* Slightly Lighter Dark Gray-Blue */
+    --highlight: #427BBF; /* Dark Blue */
+    --border: #3A4E58; /* Medium Dark Gray-Blue */
+  }
+  
+  .theme-light {
+    --background: #E5E9F2; /* Light Gray */
+    --main-text: #497FA0; /* Dark Gray-Blue */
+    --secondary-text: #9fabb3; /* Medium Light Gray */
+    --highlight: #6A85A3; /* Medium Gray-Blue */
+    --border: #88A0B9; /* Light Gray-Blue */
+  }
+  
+  .weather-container {
+    display: column;
+    font-family: "Roboto", sans-serif;
+    padding: 10px;
+  }
+  
+  .location {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-weight: bold;
+    font-size: 1.8em;
+    color: var(--main-text);
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+  }
+  
+  .current-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 10px;
+  }
+  
+  .current-icon {
+    width: 100px;
+    height: 100px;
+    filter: drop-shadow(0px 3px 3px rgba(0, 0, 0, 0.2));
+  }
+  
+  .current-stats-container {
+    display: inline-flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    font-size: 1.0em;
+    color: var(--main-text);
+  }
 
-This CSS file will be included with your plugin, and
-available in the app when your plugin is enabled.
+  .current-stats-container > * {
+    margin: -0.2em;
+  }
+  
+  .current-temp-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 10px;
+  }
+  
+  .current-temp {
 
-If your plugin does not need CSS, delete this file.
+  }
+  
+  .current-feelslike {
+    font-weight: bold;
+    color: var(--secondary-text);
+  }
+  
+  .current-humidity {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+  
+  .current-humidity-value {
+    margin-left: 0.5em;
+    font-weight: bold;
+    color: var(--secondary-text);
+  }
+  
+  .current-uv {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+  
+  .current-uv-value {
+    margin-left: 0.5em;
+    font-weight: bold;
+    color: var(--secondary-text);
+  }
+  
+  .current-aq {
+    display: flex;
+    align-items: center;
+  }
+  
+  .current-aq-value {
+    margin-left: 0.5em;
+    font-weight: bold;
+    margin-right: 4px;
+    color: var(--secondary-text);
+  }
+  
+  .current-aq-icon {
+    font-size: 18px;
+    margin-left: 4px;
+  }
+  
+  .current-conditions {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-top: -0.5em;
+    font-size: 1.0em;
+    font-weight: bold;
+    padding: 5px;
+    color: var(--main-text);
+    text-align: center; /* Center the wrapped text */
+  }
+  
+  
+  .forecast-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin: 0;
+    padding: 0px;
+    gap: 10px;
+    padding: 5px;
+  }
+  
+  .forecast-day-container {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: var(--background);
+    border: 2px solid var(--border);
+    border-radius: 5px;
+    backdrop-filter: blur(20px);
+    max-width: 25%;
+  }
+  
+  .forecast-day {
+    font-weight: bold;
+    color: var(--main-text);
+  }
+  
+  .forecast-icon {
+    width: 60px;
+    height: 60px;
+    filter: drop-shadow(0px 3px 3px rgba(0, 0, 0, 0.2));
+    padding: 2px;
+  }
+  
+  .forecast-rain {
+    color: var(--main-text);
+  }
+  
+  .last-updated {
+    display: flex;
+    align-content: center;
+    justify-content: center;
+    font-size: 0.7em;
+    color: var(--highlight);
+  }
 
-*/
+
+/* Donation Styling */
+.recent-files-donation {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 10%;
+  }
+  
+  .donate-text {
+    text-align: center;
+    margin-bottom: 5px; /* Adjust the value to desired spacing */
+  }
+  
+  
