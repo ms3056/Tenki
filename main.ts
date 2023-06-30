@@ -478,8 +478,8 @@ class WeatherSettingTab extends PluginSettingTab {
 			"https://cdn.buymeacoffee.com/buttons/v2/default-blue.png";
 		donateImage.alt = "Buy Me A Coffee";
 		rotateColorRandomly(donateImage);
-		donateImage.style.height = "60px";
-		donateImage.style.width = "217px";
+		donateImage.style.height = "48px";
+		donateImage.style.width = "173.6px";
 
 		donateLink.appendChild(donateImage);
 		donateText.appendChild(donateLink);
