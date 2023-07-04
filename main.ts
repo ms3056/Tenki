@@ -8,7 +8,7 @@ import {
 } from "obsidian";
 import axios from "axios";
 
-const WEATHER_VIEW_TYPE = "weather-view";
+const WEATHER_VIEW_TYPE = "tenki";
 
 interface ForecastDay {
 	date: string;
@@ -478,9 +478,7 @@ class WeatherSettingTab extends PluginSettingTab {
 			"https://cdn.buymeacoffee.com/buttons/v2/default-blue.png";
 		donateImage.alt = "Buy Me A Coffee";
 		rotateColorRandomly(donateImage);
-		donateImage.style.height = "48px";
-		donateImage.style.width = "173.6px";
-
+		donateImage.classList.add('donate-img');
 		donateLink.appendChild(donateImage);
 		donateText.appendChild(donateLink);
 
