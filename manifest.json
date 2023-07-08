@@ -1,11 +1,11 @@
 {
 	"id": "tenki",
 	"name": "Tenki",
-	"version": "0.3.0",
+	"version": "0.6.1",
 	"minAppVersion": "0.16.3",
 	"description": "Display the weather.",
 	"author": "HiroMike",
-	"authorUrl": "",
+	"authorUrl": "https://github.com/ms3056",
 	"fundingUrl": "https://buymeacoffee.com/mstam30561",
 	"isDesktopOnly": false
 }
