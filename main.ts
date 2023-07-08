@@ -5,8 +5,8 @@ import {
 	Setting,
 	WorkspaceLeaf,
 	ItemView,
+	requestUrl
 } from "obsidian";
-import axios from "axios";
 
 const WEATHER_VIEW_TYPE = "tenki";
 
@@ -98,12 +98,16 @@ export default class WeatherPlugin extends Plugin {
 			}
 		}, 1000);
 
+		// this.app.workspace.onLayoutReady(async () => {
+		// 	if (!isViewInitialized) {
+		// 		await this.initView();
+		// 		isViewInitialized = true;
+		// 		clearInterval(checkLayoutInterval);
+		// 	}
+		// });
+
 		this.app.workspace.onLayoutReady(async () => {
-			if (!isViewInitialized) {
-				await this.initView();
-				isViewInitialized = true;
-				clearInterval(checkLayoutInterval);
-			}
+			await this.initView();
 		});
 
 		this.addSettingTab(new WeatherSettingTab(this.app, this));
@@ -191,8 +195,9 @@ class WeatherView extends ItemView {
 
 	async fetchWeatherData(): Promise<WeatherAPIResponse> {
 		const WEATHER_API_URL = `http://api.weatherapi.com/v1/forecast.json?key=${this.plugin.settings.apiKey}&q=${this.plugin.settings.location}&days=3&aqi=yes`;
-		const response = await axios.get<WeatherAPIResponse>(WEATHER_API_URL);
-		return response.data;
+		const response = await requestUrl(WEATHER_API_URL);
+		const weatherData: WeatherAPIResponse = response.json;
+		return weatherData;
 	}
 
 	displayTemperature() {
@@ -478,7 +483,7 @@ class WeatherSettingTab extends PluginSettingTab {
 			"https://cdn.buymeacoffee.com/buttons/v2/default-blue.png";
 		donateImage.alt = "Buy Me A Coffee";
 		rotateColorRandomly(donateImage);
-		donateImage.classList.add('donate-img');
+		donateImage.classList.add("donate-img");
 		donateLink.appendChild(donateImage);
 		donateText.appendChild(donateLink);
 
