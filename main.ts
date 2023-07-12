@@ -4,8 +4,12 @@ import {
 	PluginSettingTab,
 	Setting,
 	WorkspaceLeaf,
+	ExtraButtonComponent,
+	ButtonComponent,
+	setIcon,
 	ItemView,
-	requestUrl
+	requestUrl,
+	Notice,
 } from "obsidian";
 
 const WEATHER_VIEW_TYPE = "tenki";
@@ -88,6 +92,16 @@ export default class WeatherPlugin extends Plugin {
 			callback: this.onShow.bind(this),
 		});
 
+		this.addCommand({
+			id: "refresh",
+			name: "Refresh",
+			callback: () => {
+				if (this.view) {
+					this.view.refreshWeather();
+				}
+			},
+		});
+
 		let isViewInitialized = false;
 
 		const checkLayoutInterval = setInterval(async () => {
@@ -97,14 +111,6 @@ export default class WeatherPlugin extends Plugin {
 				clearInterval(checkLayoutInterval);
 			}
 		}, 1000);
-
-		// this.app.workspace.onLayoutReady(async () => {
-		// 	if (!isViewInitialized) {
-		// 		await this.initView();
-		// 		isViewInitialized = true;
-		// 		clearInterval(checkLayoutInterval);
-		// 	}
-		// });
 
 		this.app.workspace.onLayoutReady(async () => {
 			await this.initView();
@@ -175,6 +181,16 @@ class WeatherView extends ItemView {
 		);
 	}
 
+	refreshWeather() {
+		this.plugin.clearUpdateInterval();
+		this.plugin.view.displayTemperature();
+		this.plugin.updateInterval = setInterval(
+			() => this.plugin.view.displayTemperature(),
+			this.plugin.settings.refreshInterval * 1000
+		);
+		new Notice("Tenki updated");
+	}
+
 	onClose() {
 		this.plugin.clearUpdateInterval();
 		return super.onClose();
@@ -232,6 +248,18 @@ class WeatherView extends ItemView {
 
 		const weatherContainer = document.createElement("div");
 		weatherContainer.className = "weather-container";
+
+		// Create refresh button
+		const refreshButton = weatherContainer.createDiv(
+			"tenki-refresh-button"
+		);
+
+		refreshButton.onclick = this.refreshWeather.bind(this);
+
+		// Create the ExtraButtonComponent and set the icon and tooltip
+		new ExtraButtonComponent(refreshButton)
+			.setIcon("refresh-ccw")
+			.setTooltip("Refresh", { placement: "top" });
 
 		const locationDiv = document.createElement("div");
 		locationDiv.className = "location";

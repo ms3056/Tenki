@@ -72,8 +72,35 @@ settings:
 
 .weather-container {
 	display: column;
-	padding: 10px;
+
 }
+
+.tenki-refresh-button {
+	position: absolute;
+	top: 10px;
+	right: 10px;
+	transition: transform 0.3s ease-in-out, color 0.3s ease-in-out;
+	opacity: var(--icon-opacity, 0.3);
+	--icon-opacity: 0.7;
+	--icon-size: 20px;
+	color: var(--tenki-main-text);
+	border: none;
+	background-color: transparent;
+}
+
+.tenki-refresh-button:hover, 
+.clickable-icon.setting-editor-extra-setting-button:hover {
+	transform: rotate(45deg);
+	cursor: pointer;
+	--icon-opacity: 1;
+	--icon-color: var(--tenki-highlight) !important;
+	background-color: transparent !important;
+	border: none !important;
+	color: var(--tenki-highlight) !important;
+}
+
+
+
 
 .location {
 	display: flex;

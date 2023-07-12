@@ -1,6 +1,6 @@
 {
 	"name": "Tenki",
-	"version": "0.6.1",
+	"version": "0.6.2",
 	"description": "This is a weather plugin for Obsidian (https://obsidian.md)",
 	"main": "main.js",
 	"scripts": {
