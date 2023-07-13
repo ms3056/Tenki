@@ -256,6 +256,8 @@ class WeatherView extends ItemView {
 
 		refreshButton.onclick = this.refreshWeather.bind(this);
 
+		refreshButton.setAttribute("data-app-id", "tenki");
+
 		// Create the ExtraButtonComponent and set the icon and tooltip
 		new ExtraButtonComponent(refreshButton)
 			.setIcon("refresh-ccw")

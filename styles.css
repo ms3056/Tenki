@@ -88,8 +88,7 @@ settings:
 	background-color: transparent;
 }
 
-.tenki-refresh-button:hover, 
-.clickable-icon.setting-editor-extra-setting-button:hover {
+.tenki-refresh-button[data-app-id="tenki"]:hover {
 	transform: rotate(45deg);
 	cursor: pointer;
 	--icon-opacity: 1;
