@@ -5,8 +5,6 @@ import {
 	Setting,
 	WorkspaceLeaf,
 	ExtraButtonComponent,
-	ButtonComponent,
-	setIcon,
 	ItemView,
 	requestUrl,
 	Notice,
@@ -30,6 +28,22 @@ interface ForecastDay {
 
 interface Forecast {
 	forecastday: ForecastDay[];
+}
+
+function debounce(func: (...args: any[]) => void, wait: number) {
+	let timeout: NodeJS.Timeout | null = null;
+	return function executedFunction(...args: any[]) {
+		const later = () => {
+			if (timeout !== null) {
+				clearTimeout(timeout);
+				func(...args);
+			}
+		};
+		if (timeout !== null) {
+			clearTimeout(timeout);
+		}
+		timeout = setTimeout(later, wait);
+	};
 }
 
 interface WeatherAPIResponse {
@@ -241,7 +255,7 @@ class WeatherView extends ItemView {
 		);
 		const humidity = `${weatherData.current.humidity}%`;
 		const uv = weatherData.current.uv.toString();
-		const aq = weatherData.current.air_quality["us-epa-index"].toString();
+		// const aq = weatherData.current.air_quality["us-epa-index"].toString();
 		const currentConditions = weatherData.current.condition.text;
 		const forecastData = this.extractForecastData(weatherData.forecast);
 		const lastUpdated = weatherData.current.last_updated;
@@ -318,21 +332,49 @@ class WeatherView extends ItemView {
 
 		const aqDiv = document.createElement("div");
 		aqDiv.className = "current-aq";
-		const aqText = document.createElement("span");
-		aqText.textContent = "AQ: ";
-		aqDiv.appendChild(aqText);
 
-		const aqValueDiv = document.createElement("div");
-		aqValueDiv.className = "current-aq-value";
-		aqValueDiv.textContent = aq;
+		// Check if air quality data is available
+		if (
+			weatherData.current.air_quality &&
+			weatherData.current.air_quality["us-epa-index"]
+		) {
+			const aq =
+				weatherData.current.air_quality["us-epa-index"].toString();
 
-		const aqIconDiv = document.createElement("div");
-		aqIconDiv.className = "current-aq-icon";
-		const aqIcon = this.createIcon(aq);
-		aqIconDiv.appendChild(aqIcon);
+			const aqText = document.createElement("span");
+			aqText.textContent = "AQ: ";
+			aqDiv.appendChild(aqText);
 
-		aqDiv.appendChild(aqValueDiv);
-		aqDiv.appendChild(aqIconDiv);
+			const aqValueDiv = document.createElement("div");
+			aqValueDiv.className = "current-aq-value";
+			aqValueDiv.textContent = aq;
+
+			const aqIconDiv = document.createElement("div");
+			aqIconDiv.className = "current-aq-icon";
+			const aqIcon = this.createIcon(aq);
+			aqIconDiv.appendChild(aqIcon);
+
+			aqDiv.appendChild(aqValueDiv);
+			aqDiv.appendChild(aqIconDiv);
+		}
+
+		// const aqDiv = document.createElement("div");
+		// aqDiv.className = "current-aq";
+		// const aqText = document.createElement("span");
+		// aqText.textContent = "AQ: ";
+		// aqDiv.appendChild(aqText);
+
+		// const aqValueDiv = document.createElement("div");
+		// aqValueDiv.className = "current-aq-value";
+		// aqValueDiv.textContent = aq;
+
+		// const aqIconDiv = document.createElement("div");
+		// aqIconDiv.className = "current-aq-icon";
+		// const aqIcon = this.createIcon(aq);
+		// aqIconDiv.appendChild(aqIcon);
+
+		// aqDiv.appendChild(aqValueDiv);
+		// aqDiv.appendChild(aqIconDiv);
 		currentStatsContainer.appendChild(aqDiv);
 
 		const currentConditionsDiv = document.createElement("div");
@@ -548,15 +590,18 @@ class WeatherSettingTab extends PluginSettingTab {
 		new Setting(containerEl)
 			.setName("Location")
 			.setDesc("Enter your location")
-			.addText((text) =>
-				text
-					.setPlaceholder("Enter your location")
-					.setValue(this.plugin.settings.location)
-					.onChange(async (value) => {
-						this.plugin.settings.location = value.trim();
-						await this.plugin.saveSettings();
-						this.plugin.view.displayTemperature();
-					})
+			.addText(
+				(text) =>
+					text
+						.setPlaceholder("Enter your location")
+						.setValue(this.plugin.settings.location)
+						.onChange(
+							debounce(async (value) => {
+								this.plugin.settings.location = value.trim();
+								await this.plugin.saveSettings();
+								this.plugin.view.displayTemperature();
+							}, 500)
+						) // Wait for 500ms of inactivity before calling the function
 			);
 
 		new Setting(containerEl)
