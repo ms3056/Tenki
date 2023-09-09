@@ -8,6 +8,7 @@ import {
 	ItemView,
 	requestUrl,
 	Notice,
+	debounce,
 } from "obsidian";
 
 const WEATHER_VIEW_TYPE = "tenki";
@@ -28,22 +29,6 @@ interface ForecastDay {
 
 interface Forecast {
 	forecastday: ForecastDay[];
-}
-
-function debounce(func: (...args: any[]) => void, wait: number) {
-	let timeout: NodeJS.Timeout | null = null;
-	return function executedFunction(...args: any[]) {
-		const later = () => {
-			if (timeout !== null) {
-				clearTimeout(timeout);
-				func(...args);
-			}
-		};
-		if (timeout !== null) {
-			clearTimeout(timeout);
-		}
-		timeout = setTimeout(later, wait);
-	};
 }
 
 interface WeatherAPIResponse {
@@ -86,7 +71,7 @@ const DEFAULT_SETTINGS: WeatherSettings = {
 export default class WeatherPlugin extends Plugin {
 	view: WeatherView;
 	settings: WeatherSettings;
-	updateInterval: NodeJS.Timeout | null = null;
+	updateInterval: number = -1;
 
 	public async onload(): Promise<void> {
 		this.settings = Object.assign(
@@ -115,16 +100,6 @@ export default class WeatherPlugin extends Plugin {
 				}
 			},
 		});
-
-		let isViewInitialized = false;
-
-		const checkLayoutInterval = setInterval(async () => {
-			if (this.app.workspace.layoutReady && !isViewInitialized) {
-				await this.initView();
-				isViewInitialized = true;
-				clearInterval(checkLayoutInterval);
-			}
-		}, 1000);
 
 		this.app.workspace.onLayoutReady(async () => {
 			await this.initView();
@@ -158,7 +133,7 @@ export default class WeatherPlugin extends Plugin {
 			} else {
 				// Create a new view
 				this.view = new WeatherView(leaf, this);
-				this.updateInterval = setInterval(
+				this.updateInterval = window.setTimeout(
 					this.view.displayTemperature.bind(this.view),
 					this.settings.refreshInterval * 1000
 				);
@@ -169,7 +144,7 @@ export default class WeatherPlugin extends Plugin {
 	public clearUpdateInterval(): void {
 		if (this.updateInterval) {
 			clearInterval(this.updateInterval);
-			this.updateInterval = null;
+			this.updateInterval = -1;
 		}
 	}
 
@@ -189,7 +164,7 @@ class WeatherView extends ItemView {
 
 	async onOpen() {
 		this.displayTemperature();
-		this.plugin.updateInterval = setInterval(
+		this.plugin.updateInterval = window.setTimeout(
 			() => this.displayTemperature(),
 			this.plugin.settings.refreshInterval * 1000
 		);
@@ -198,7 +173,7 @@ class WeatherView extends ItemView {
 	refreshWeather() {
 		this.plugin.clearUpdateInterval();
 		this.plugin.view.displayTemperature();
-		this.plugin.updateInterval = setInterval(
+		this.plugin.updateInterval = window.setTimeout(
 			() => this.plugin.view.displayTemperature(),
 			this.plugin.settings.refreshInterval * 1000
 		);
@@ -255,7 +230,6 @@ class WeatherView extends ItemView {
 		);
 		const humidity = `${weatherData.current.humidity}%`;
 		const uv = weatherData.current.uv.toString();
-		// const aq = weatherData.current.air_quality["us-epa-index"].toString();
 		const currentConditions = weatherData.current.condition.text;
 		const forecastData = this.extractForecastData(weatherData.forecast);
 		const lastUpdated = weatherData.current.last_updated;
@@ -358,23 +332,6 @@ class WeatherView extends ItemView {
 			aqDiv.appendChild(aqIconDiv);
 		}
 
-		// const aqDiv = document.createElement("div");
-		// aqDiv.className = "current-aq";
-		// const aqText = document.createElement("span");
-		// aqText.textContent = "AQ: ";
-		// aqDiv.appendChild(aqText);
-
-		// const aqValueDiv = document.createElement("div");
-		// aqValueDiv.className = "current-aq-value";
-		// aqValueDiv.textContent = aq;
-
-		// const aqIconDiv = document.createElement("div");
-		// aqIconDiv.className = "current-aq-icon";
-		// const aqIcon = this.createIcon(aq);
-		// aqIconDiv.appendChild(aqIcon);
-
-		// aqDiv.appendChild(aqValueDiv);
-		// aqDiv.appendChild(aqIconDiv);
 		currentStatsContainer.appendChild(aqDiv);
 
 		const currentConditionsDiv = document.createElement("div");
@@ -528,40 +485,11 @@ class WeatherSettingTab extends PluginSettingTab {
 	async display() {
 		const { containerEl } = this;
 		containerEl.empty();
-		const div = containerEl.createEl("div", {
-			cls: "recent-files-donation",
-		});
 
-		const donateText = document.createElement("div");
-		donateText.className = "donate-text";
-
-		const donateDescription = document.createElement("p");
-		donateDescription.textContent =
-			"If you find this plugin valuable and would like to support its development, please consider using the button below. Your contribution is greatly appreciated!";
-
-		donateText.appendChild(donateDescription);
-
-		const donateLink = document.createElement("a");
-		donateLink.href = "https://www.buymeacoffee.com/mstam30561";
-		donateLink.target = "_blank";
-
-		function rotateColorRandomly(element: HTMLElement) {
-			const rotationDegrees = Math.floor(Math.random() * 8 + 1) * 45; // Randomly select a rotation value in increments of 45 degrees
-			element.style.filter = `hue-rotate(${rotationDegrees}deg)`;
-		}
-
-		const donateImage = document.createElement("img");
-		donateImage.src =
-			"https://cdn.buymeacoffee.com/buttons/v2/default-blue.png";
-		donateImage.alt = "Buy Me A Coffee";
-		rotateColorRandomly(donateImage);
-		donateImage.classList.add("donate-img");
-		donateLink.appendChild(donateImage);
-		donateText.appendChild(donateLink);
-
-		div.appendChild(donateText);
+		// Title
 		containerEl.createEl("h1", { text: "Tenki" });
 
+		// API Key Setting
 		new Setting(containerEl)
 			.setName("API Key")
 			.setDesc(
@@ -587,23 +515,24 @@ class WeatherSettingTab extends PluginSettingTab {
 					})
 			);
 
+		// Location Setting
 		new Setting(containerEl)
 			.setName("Location")
 			.setDesc("Enter your location")
-			.addText(
-				(text) =>
-					text
-						.setPlaceholder("Enter your location")
-						.setValue(this.plugin.settings.location)
-						.onChange(
-							debounce(async (value) => {
-								this.plugin.settings.location = value.trim();
-								await this.plugin.saveSettings();
-								this.plugin.view.displayTemperature();
-							}, 500)
-						) // Wait for 500ms of inactivity before calling the function
+			.addText((text) =>
+				text
+					.setPlaceholder("Enter your location")
+					.setValue(this.plugin.settings.location)
+					.onChange(
+						debounce(async (value) => {
+							this.plugin.settings.location = value.trim();
+							await this.plugin.saveSettings();
+							this.plugin.view.displayTemperature();
+						}, 750)
+					)
 			);
 
+		// Unit Setting
 		new Setting(containerEl)
 			.setName("Unit")
 			.setDesc("Select the unit for temperature")
@@ -621,6 +550,7 @@ class WeatherSettingTab extends PluginSettingTab {
 					})
 			);
 
+		// Refresh Interval Setting
 		new Setting(containerEl)
 			.setName("Refresh Interval")
 			.setDesc("Set the refresh interval in minutes")
@@ -637,12 +567,45 @@ class WeatherSettingTab extends PluginSettingTab {
 							await this.plugin.saveSettings();
 							this.plugin.clearUpdateInterval();
 							this.plugin.view.displayTemperature();
-							this.plugin.updateInterval = setInterval(
+							this.plugin.updateInterval = window.setInterval(
 								() => this.plugin.view.displayTemperature(),
 								this.plugin.settings.refreshInterval * 1000
 							);
 						}
 					})
 			);
+
+		// Donation Information
+		const div = containerEl.createEl("div", {
+			cls: "recent-files-donation",
+		});
+
+		const donateText = document.createElement("div");
+		donateText.className = "donate-text";
+
+		const donateDescription = document.createElement("p");
+		donateDescription.textContent =
+			"If you find this plugin valuable and would like to support its development, please consider using the button below. Your contribution is greatly appreciated!";
+		donateText.appendChild(donateDescription);
+
+		const donateLink = document.createElement("a");
+		donateLink.href = "https://www.buymeacoffee.com/mstam30561";
+		donateLink.target = "_blank";
+
+		function rotateColorRandomly(element: HTMLElement) {
+			const rotationDegrees = Math.floor(Math.random() * 8 + 1) * 45; // Randomly select a rotation value in increments of 45 degrees
+			element.style.filter = `hue-rotate(${rotationDegrees}deg)`;
+		}
+
+		const donateImage = document.createElement("img");
+		donateImage.src =
+			"https://cdn.buymeacoffee.com/buttons/v2/default-blue.png";
+		donateImage.alt = "Buy Me A Coffee";
+		rotateColorRandomly(donateImage);
+		donateImage.classList.add("donate-img");
+		donateLink.appendChild(donateImage);
+		donateText.appendChild(donateLink);
+
+		div.appendChild(donateText);
 	}
 }

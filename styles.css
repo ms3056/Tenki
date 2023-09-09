@@ -269,7 +269,7 @@ settings:
 }
 
 /* Donation Styling */
-.recent-files-donation {
+.tenki-donation {
 	display: flex;
 	flex-direction: column;
 	align-items: center;

@@ -1,7 +1,7 @@
 {
 	"id": "tenki",
 	"name": "Tenki",
-	"version": "0.7.0",
+	"version": "0.7.5",
 	"minAppVersion": "0.16.3",
 	"description": "Display the weather.",
 	"author": "HiroMike",
