@@ -126,14 +126,14 @@ export default class WeatherPlugin extends Plugin {
 			await leaf.setViewState({ type: WEATHER_VIEW_TYPE });
 			this.app.workspace.revealLeaf(leaf);
 
-			// Check if the view is already created
+			// Check if the view is already created 
 			if (this.view instanceof WeatherView) {
 				// Update the existing view
 				this.view.displayTemperature();
 			} else {
 				// Create a new view
 				this.view = new WeatherView(leaf, this);
-				this.updateInterval = window.setTimeout(
+				this.updateInterval = window.setInterval(
 					this.view.displayTemperature.bind(this.view),
 					this.settings.refreshInterval * 1000
 				);
@@ -164,7 +164,7 @@ class WeatherView extends ItemView {
 
 	async onOpen() {
 		this.displayTemperature();
-		this.plugin.updateInterval = window.setTimeout(
+		this.plugin.updateInterval = window.setInterval(
 			() => this.displayTemperature(),
 			this.plugin.settings.refreshInterval * 1000
 		);
@@ -173,7 +173,7 @@ class WeatherView extends ItemView {
 	refreshWeather() {
 		this.plugin.clearUpdateInterval();
 		this.plugin.view.displayTemperature();
-		this.plugin.updateInterval = window.setTimeout(
+		this.plugin.updateInterval = window.setInterval(
 			() => this.plugin.view.displayTemperature(),
 			this.plugin.settings.refreshInterval * 1000
 		);
