@@ -17,6 +17,13 @@ This is a weather display for Obsidian (https://obsidian.md).
 - The weather feed doesn't update more than about every 30 minutes - setting the refresh value lower than this not be useful
 - All of the weather display elements have CSS classes - take a look at styles.css and feel free to create your own snippets to hide or style the elements how you like
 
+
+# Network Usage
+According to the Obsidian Developer Piolicy in the [Disclosures](https://docs.obsidian.md/Developer+policies#Disclosures) section an Obsidian plugin must explain which network services are used and why.
+This plugin retrieves information from the internet to get the weather data for display at `http://api.weatherapi.com/v1/` combined with the user's personal API key. 
+
+
+
 # Buy Me A Coffee
 
 If you find Tenki useful, consider supporting its development by buying me a coffee:
