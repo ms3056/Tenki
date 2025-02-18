@@ -356,12 +356,13 @@ class WeatherView extends ItemView {
 
 			const month = forecastDate.toLocaleString(undefined, {
 				month: "short",
+				timezone: "UTC"
 			});
-			const day = forecastDate.getDate().toString();
+			const day = forecastDate.getUTCDate().toString()
 			const forecastDateFormatted =
-				forecastDate.getDate() === today.getDate() &&
-				forecastDate.getMonth() === today.getMonth() &&
-				forecastDate.getFullYear() === today.getFullYear()
+				forecastDate.getUTCDate() === today.getDate() &&
+				forecastDate.getUTCMonth() === today.getMonth() &&
+				forecastDate.getUTCFullYear() === today.getFullYear()
 					? "Today"
 					: `${month} ${day}`;
 
