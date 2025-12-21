@@ -25,6 +25,10 @@ interface ForecastDay {
 		maxtemp_f: number;
 		mintemp_f: number;
 	};
+	astro: {
+		sunrise: string;
+		sunset: string;
+	};
 }
 
 interface Forecast {
@@ -436,11 +440,14 @@ class WeatherView extends ItemView {
 			const tooltip = document.createElement("div");
 			tooltip.className = "forecast-tooltip";
 
+			let tooltipText = "";
 			if (this.plugin.settings.unit === "celsius") {
-				tooltip.textContent = `${forecast.minTempC}°C ${forecast.maxTempC}°C`;
+				tooltipText = `${forecast.minTempC}°C ${forecast.maxTempC}°C`;
 			} else {
-				tooltip.textContent = `${forecast.minTempF}°F ${forecast.maxTempF}°F`;
+				tooltipText = `${forecast.minTempF}°F ${forecast.maxTempF}°F`;
 			}
+			tooltipText += `\nSunrise: ${forecast.sunrise}\nSunset: ${forecast.sunset}`;
+			tooltip.textContent = tooltipText;
 			forecastDayContainer.appendChild(tooltip);
 
 			// Add mouseover event listener to show the tooltip
@@ -478,6 +485,8 @@ class WeatherView extends ItemView {
 		maxTempC: string;
 		minTempF: string;
 		maxTempF: string;
+		sunrise: string;
+		sunset: string;
 	}[] {
 		if (!forecast) return [];
 
@@ -489,6 +498,8 @@ class WeatherView extends ItemView {
 			maxTempC: `${forecastDay.day.maxtemp_c}`,
 			minTempF: `${forecastDay.day.mintemp_f}`,
 			maxTempF: `${forecastDay.day.maxtemp_f}`,
+			sunrise: forecastDay.astro.sunrise,
+			sunset: forecastDay.astro.sunset,
 		}));
 	}
 

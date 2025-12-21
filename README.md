@@ -44,6 +44,9 @@ For more information about Obsidian's API, refer to the [Obsidian API Documentat
 
 ## Changelog
 
+### 0.7.9
+- Feature: Add sunrise and sunset times to forecast tooltips via the astro section of the weather API.
+
 ### 0.7.7
 - Security: Switch all network calls and icons to HTTPS.
 - Robustness: Centralized interval lifecycle; prevent duplicate timers.
