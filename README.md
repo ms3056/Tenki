@@ -41,3 +41,13 @@ I would like to express my gratitude to the members of the Discord community who
 ## API Documentation
 
 For more information about Obsidian's API, refer to the [Obsidian API Documentation](https://docs.obsidian.md/Home).
+
+## Changelog
+
+### 0.7.7
+- Security: Switch all network calls and icons to HTTPS.
+- Robustness: Centralized interval lifecycle; prevent duplicate timers.
+- Defaults: Enforce 30-minute minimum refresh interval.
+- UX: Increase location debounce; skip empty values.
+- Error handling: Notices for missing settings and fetch failures.
+- Build: Upgrade esbuild to 0.27.x to address advisory GHSA-67mh-4wv8-2f99.
