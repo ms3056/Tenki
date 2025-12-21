@@ -3,7 +3,8 @@ name: Release Obsidian plugin
 on:
   push:
     tags:
-      - "*"
+      - "v*"
+  workflow_dispatch:
 
 jobs:
   build:
@@ -22,13 +23,15 @@ jobs:
           npm install
           npm run build
 
-      - name: Create release
+      - name: Create release (publish)
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           tag="${GITHUB_REF#refs/tags/}"
+          zipname="tenki-${tag}.zip"
+          zip -j "$zipname" main.js manifest.json styles.css
 
           gh release create "$tag" \
             --title="$tag" \
-            --draft \
-            main.js manifest.json styles.css
+            --generate-notes \
+            "$zipname" main.js manifest.json styles.css
