@@ -57,6 +57,10 @@ interface WeatherAPIResponse {
 interface WeatherSettings {
 	apiKey: string;
 	unit: "celsius" | "fahrenheit";
+	/**
+	 * Stored in seconds; default is 30 minutes (1800s).
+	 * Keep name for backward compatibility with saved data.
+	 */
 	refreshInterval: number;
 	location: string;
 }
@@ -64,20 +68,27 @@ interface WeatherSettings {
 const DEFAULT_SETTINGS: WeatherSettings = {
 	apiKey: "",
 	unit: "celsius",
-	refreshInterval: 30,
+	// 30 minutes expressed in seconds
+	refreshInterval: 30 * 60,
 	location: "",
 };
+
+const MIN_REFRESH_SECONDS = 30 * 60;
 
 export default class WeatherPlugin extends Plugin {
 	view: WeatherView;
 	settings: WeatherSettings;
-	updateInterval: number = -1;
 
 	public async onload(): Promise<void> {
 		this.settings = Object.assign(
 			{},
 			DEFAULT_SETTINGS,
 			await this.loadData()
+		);
+
+		this.settings.refreshInterval = Math.max(
+			MIN_REFRESH_SECONDS,
+			this.settings.refreshInterval || MIN_REFRESH_SECONDS
 		);
 
 		this.registerView(
@@ -95,9 +106,12 @@ export default class WeatherPlugin extends Plugin {
 			id: "refresh",
 			name: "Refresh",
 			callback: () => {
-				if (this.view) {
-					this.view.refreshWeather();
+				if (!this.view) {
+					new Notice("Open Tenki before refreshing");
+					void this.initView();
+					return;
 				}
+				this.view.refreshWeather();
 			},
 		});
 
@@ -108,44 +122,29 @@ export default class WeatherPlugin extends Plugin {
 		this.addSettingTab(new WeatherSettingTab(this.app, this));
 	}
 
-	public onunload(): void {
-		this.clearUpdateInterval();
-	}
-
 	public onShow(): void {
 		this.initView();
 	}
 
 	private async initView(): Promise<void> {
-		if (this.app.workspace.getLeavesOfType(WEATHER_VIEW_TYPE).length) {
+		const existingLeaves = this.app.workspace.getLeavesOfType(
+			WEATHER_VIEW_TYPE
+		);
+		if (existingLeaves.length) {
+			const view = existingLeaves[0].view as WeatherView;
+			this.view = view;
 			return;
 		}
 
-		const leaf = this.app.workspace.getRightLeaf(false);
-		if (leaf) {
-			await leaf.setViewState({ type: WEATHER_VIEW_TYPE });
-			this.app.workspace.revealLeaf(leaf);
+		const leaf =
+			this.app.workspace.getRightLeaf(false) ??
+			this.app.workspace.getRightLeaf(true);
 
-			// Check if the view is already created 
-			if (this.view instanceof WeatherView) {
-				// Update the existing view
-				this.view.displayTemperature();
-			} else {
-				// Create a new view
-				this.view = new WeatherView(leaf, this);
-				this.updateInterval = window.setInterval(
-					this.view.displayTemperature.bind(this.view),
-					this.settings.refreshInterval * 1000
-				);
-			}
-		}
-	}
+		if (!leaf) return;
 
-	public clearUpdateInterval(): void {
-		if (this.updateInterval) {
-			clearInterval(this.updateInterval);
-			this.updateInterval = -1;
-		}
+		await leaf.setViewState({ type: WEATHER_VIEW_TYPE });
+		this.app.workspace.revealLeaf(leaf);
+		this.view = leaf.view as WeatherView;
 	}
 
 	async saveSettings(): Promise<void> {
@@ -156,6 +155,8 @@ export default class WeatherPlugin extends Plugin {
 class WeatherView extends ItemView {
 	plugin: WeatherPlugin;
 	weatherContainer: HTMLElement;
+	private refreshIntervalId: number | null = null;
+	private lastErrorNoticeAt: number | null = null;
 
 	constructor(leaf: WorkspaceLeaf, plugin: WeatherPlugin) {
 		super(leaf);
@@ -163,26 +164,44 @@ class WeatherView extends ItemView {
 	}
 
 	async onOpen() {
-		this.displayTemperature();
-		this.plugin.updateInterval = window.setInterval(
-			() => this.displayTemperature(),
-			this.plugin.settings.refreshInterval * 1000
-		);
+		await this.displayTemperature();
+		this.startRefreshTimer();
 	}
 
 	refreshWeather() {
-		this.plugin.clearUpdateInterval();
-		this.plugin.view.displayTemperature();
-		this.plugin.updateInterval = window.setInterval(
-			() => this.plugin.view.displayTemperature(),
-			this.plugin.settings.refreshInterval * 1000
-		);
+		this.displayTemperature();
+		this.startRefreshTimer();
 		new Notice("Tenki updated");
 	}
 
 	onClose() {
-		this.plugin.clearUpdateInterval();
+		this.clearRefreshTimer();
 		return super.onClose();
+	}
+
+	private startRefreshTimer() {
+		this.clearRefreshTimer();
+		const refreshMs = Math.max(
+			MIN_REFRESH_SECONDS,
+			this.plugin.settings.refreshInterval
+		);
+
+		this.refreshIntervalId = window.setInterval(
+			() => this.displayTemperature(),
+			refreshMs * 1000
+		);
+		this.registerInterval(this.refreshIntervalId);
+	}
+
+	private clearRefreshTimer() {
+		if (this.refreshIntervalId !== null) {
+			window.clearInterval(this.refreshIntervalId);
+			this.refreshIntervalId = null;
+		}
+	}
+
+	public restartRefreshTimer() {
+		this.startRefreshTimer();
 	}
 
 	getViewType() {
@@ -199,22 +218,53 @@ class WeatherView extends ItemView {
 	}
 
 	async fetchWeatherData(): Promise<WeatherAPIResponse> {
-		const WEATHER_API_URL = `http://api.weatherapi.com/v1/forecast.json?key=${this.plugin.settings.apiKey}&q=${this.plugin.settings.location}&days=3&aqi=yes`;
-		const response = await requestUrl(WEATHER_API_URL);
+		const { apiKey, location } = this.plugin.settings;
+		if (!apiKey || !location) {
+			throw new Error("Missing API key or location");
+		}
+
+		const WEATHER_API_URL = `https://api.weatherapi.com/v1/forecast.json?key=${encodeURIComponent(
+			apiKey
+		)}&q=${encodeURIComponent(location)}&days=3&aqi=yes`;
+		const response = await requestUrl({
+			url: WEATHER_API_URL,
+			method: "GET",
+		});
+		if (response.status >= 400) {
+			throw new Error(`Weather API error ${response.status}`);
+		}
 		const weatherData: WeatherAPIResponse = response.json;
 		return weatherData;
 	}
 
-	displayTemperature() {
-		this.fetchWeatherData()
-			.then((weatherData) => {
-				const weatherWidget = this.createWeatherWidget(weatherData);
-				this.containerEl.empty();
-				this.containerEl.appendChild(weatherWidget);
-			})
-			.catch((error) => {
-				console.error("Failed to fetch weather data", error);
-			});
+	async displayTemperature() {
+		if (!this.plugin.settings.apiKey || !this.plugin.settings.location) {
+			this.showErrorNotice("Set API key and location to load Tenki");
+			return;
+		}
+
+		try {
+			const weatherData = await this.fetchWeatherData();
+			const weatherWidget = this.createWeatherWidget(weatherData);
+			this.containerEl.empty();
+			this.containerEl.appendChild(weatherWidget);
+		} catch (error) {
+			console.error("Failed to fetch weather data", error);
+			this.showErrorNotice(
+				"Tenki could not fetch weather. Check network, API key, and location."
+			);
+		}
+	}
+
+	private showErrorNotice(message: string) {
+		const now = Date.now();
+		if (
+			this.lastErrorNoticeAt === null ||
+			now - this.lastErrorNoticeAt > 60_000
+		) {
+			new Notice(message);
+			this.lastErrorNoticeAt = now;
+		}
 	}
 
 	createWeatherWidget(weatherData: WeatherAPIResponse) {
@@ -262,7 +312,7 @@ class WeatherView extends ItemView {
 
 		const currentIconImg = document.createElement("img");
 		currentIconImg.className = "current-icon";
-		currentIconImg.src = `http:${currentIcon}`;
+		currentIconImg.src = `https:${currentIcon}`;
 		currentIconImg.alt = "Weather Icon";
 		currentContainer.appendChild(currentIconImg);
 
@@ -310,10 +360,12 @@ class WeatherView extends ItemView {
 		// Check if air quality data is available
 		if (
 			weatherData.current.air_quality &&
-			weatherData.current.air_quality["us-epa-index"]
+			weatherData.current.air_quality["us-epa-index"] !== undefined &&
+			weatherData.current.air_quality["us-epa-index"] !== null
 		) {
-			const aq =
-				weatherData.current.air_quality["us-epa-index"].toString();
+			const aq = String(
+				weatherData.current.air_quality["us-epa-index"]
+			);
 
 			const aqText = document.createElement("span");
 			aqText.textContent = "AQ: ";
@@ -372,7 +424,7 @@ class WeatherView extends ItemView {
 
 			const forecastIconImg = document.createElement("img");
 			forecastIconImg.className = "forecast-icon";
-			forecastIconImg.src = `http:${forecast.icon}`;
+			forecastIconImg.src = `https:${forecast.icon}`;
 			forecastIconImg.alt = "Weather Icon";
 			forecastDayContainer.appendChild(forecastIconImg);
 
@@ -512,7 +564,7 @@ class WeatherSettingTab extends PluginSettingTab {
 					.onChange(async (value) => {
 						this.plugin.settings.apiKey = value.trim();
 						await this.plugin.saveSettings();
-						this.plugin.view.displayTemperature();
+						await this.plugin.view?.displayTemperature();
 					})
 			);
 
@@ -526,10 +578,12 @@ class WeatherSettingTab extends PluginSettingTab {
 					.setValue(this.plugin.settings.location)
 					.onChange(
 						debounce(async (value) => {
-							this.plugin.settings.location = value.trim();
+							const trimmed = value.trim();
+							this.plugin.settings.location = trimmed;
 							await this.plugin.saveSettings();
-							this.plugin.view.displayTemperature();
-						}, 750)
+							if (!trimmed) return;
+							await this.plugin.view?.displayTemperature();
+						}, 1500)
 					)
 			);
 
@@ -562,16 +616,13 @@ class WeatherSettingTab extends PluginSettingTab {
 						(this.plugin.settings.refreshInterval / 60).toString()
 					)
 					.onChange(async (value) => {
-						const minutes = parseInt(value.trim());
+						const minutes = parseInt(value.trim(), 10);
 						if (!isNaN(minutes) && minutes > 0) {
-							this.plugin.settings.refreshInterval = minutes * 60;
+							const clampedMinutes = Math.max(30, minutes);
+							this.plugin.settings.refreshInterval = clampedMinutes * 60;
 							await this.plugin.saveSettings();
-							this.plugin.clearUpdateInterval();
-							this.plugin.view.displayTemperature();
-							this.plugin.updateInterval = window.setInterval(
-								() => this.plugin.view.displayTemperature(),
-								this.plugin.settings.refreshInterval * 1000
-							);
+							await this.plugin.view?.displayTemperature();
+							this.plugin.view?.restartRefreshTimer();
 						}
 					})
 			);
