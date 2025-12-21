@@ -71,8 +71,8 @@ settings:
 }
 
 .weather-container {
-	display: column;
-
+	display: flex;
+	flex-direction: column;
 }
 
 .tenki-refresh-button[data-app-id="tenki"] .clickable-icon {

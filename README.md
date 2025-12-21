@@ -14,13 +14,13 @@ This is a weather display for Obsidian (https://obsidian.md).
 - Head over to weatherapi.com (you can link to it from the settings) and get your free api key and paste it into the settings
 - Enter your city, and you should see the weather update
 - If the app is not visible then from the command menu (control+p on Windows) type tenki and enter `Tenki: Open`
-- The weather feed doesn't update more than about every 30 minutes - setting the refresh value lower than this not be useful
+- The weather feed doesn't update more than about every 30 minutes; Tenki enforces a 30-minute minimum refresh interval by default
 - All of the weather display elements have CSS classes - take a look at styles.css and feel free to create your own snippets to hide or style the elements how you like
 
 
 # Network Usage
 According to the Obsidian Developer Piolicy in the [Disclosures](https://docs.obsidian.md/Developer+policies#Disclosures) section an Obsidian plugin must explain which network services are used and why.
-This plugin retrieves information from the internet to get the weather data for display at `http://api.weatherapi.com/v1/` combined with the user's personal API key. 
+This plugin retrieves information from the internet to get the weather data for display at `https://api.weatherapi.com/v1/` combined with the user's personal API key. 
 
 
 
